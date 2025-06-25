@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flappy Dot</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+    body {
+      margin: 0;
+      font-family: 'Fredoka One', cursive;
+      background: #b3e5fc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+    #menu {
+      background: rgba(255,255,255,0.95);
+      padding: 40px;
+      width: 400px;
+      border-radius: 16px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .difficulty-button, #replayButton {
+      padding: 15px 30px;
+      margin: 10px;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #00796b;
+      color: white;
+    }
+    #gameCanvas {
+      display: none;
+      width: 800px;
+      height: 600px;
+      background-color: #a7dfaf;
+      border: 4px solid #37474f;
+      border-radius: 12px;
+    }
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #37474f;
+      font-size: 60px;
+      font-weight: bold;
+      display: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="menu">
+    <h1>Flappy Dot</h1>
+    <p>Select difficulty:</p>
+    <button class="difficulty-button" onclick="startGame('easy')">Easy</button>
+    <button class="difficulty-button" onclick="startGame('medium')">Normal</button>
+    <button class="difficulty-button" onclick="startGame('hard')">Hard</button>
+  </div>
+
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <div id="overlay"></div>
+  <audio id="scoreSound" src="https://freesound.org/data/previews/341/341695_6248723-lq.mp3"></audio>
+  <audio id="gameOverSound" src="https://freesound.org/data/previews/178/178186_3505590-lq.mp3"></audio>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreSound = document.getElementById('scoreSound');
+    const gameOverSound = document.getElementById('gameOverSound');
+    const overlay = document.getElementById('overlay');
+
+    let gap, pipeSpeed;
+    let birdY = 250, velocity = 0;
+    const gravity = 0.5;
+    const birdRadius = 15;
+    let pipes = [];
+    let frame = 0, score = 0, countdown = 3;
+    let gameInterval, countInterval;
+    let gameOver = false;
+
+    function startGame(difficulty) {
+      document.getElementById('menu').style.display = 'none';
+      canvas.style.display = 'block';
+
+      if (difficulty === 'easy') {
+        gap = 260; pipeSpeed = 2;
+      } else if (difficulty === 'medium') {
+        gap = 195; pipeSpeed = 3;
+      } else {
+        gap = 130; pipeSpeed = 4;
+      }
+
+      countdown = 3;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '60px Fredoka One';
+      const instr = "Using your spacebar to play";
+
+      countInterval = setInterval(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#37474f';
+        ctx.textAlign = 'center';
+        ctx.fillText(countdown > 0 ? countdown : 'Go!', canvas.width / 2, canvas.height / 2);
+        ctx.font = '28px Fredoka One';
+        ctx.fillText(instr, canvas.width / 2, canvas.height / 2 + 50);
+        countdown--;
+        if (countdown < 0) {
+          clearInterval(countInterval);
+          initGame();
+        }
+      }, 1000);
+    }
+
+    function initGame() {
+      birdY = canvas.height / 2;
+      velocity = 0;
+      pipes = [];
+      frame = 0;
+      score = 0;
+      gameOver = false;
+      overlay.style.display = 'none';
+      document.addEventListener('keydown', e => { if (e.code === 'Space') velocity = -8; });
+      requestAnimationFrame(update);
+    }
+
+    function drawBird() {
+      ctx.beginPath();
+      ctx.arc(80, birdY, birdRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawPipe(pipe) {
+      const grad = ctx.createLinearGradient(pipe.x, 0, pipe.x + 50, 0);
+      grad.addColorStop(0, '#2e7d32');
+      grad.addColorStop(1, '#81c784');
+
+      ctx.fillStyle = grad;
+      ctx.fillRect(pipe.x, 0, 50, pipe.top);
+      ctx.fillRect(pipe.x, pipe.top + gap, 50, canvas.height);
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      velocity += gravity;
+      birdY += velocity;
+      drawBird();
+
+      if (frame % 90 === 0) {
+        let topHeight = Math.floor(Math.random() * 200) + 50;
+        pipes.push({ x: canvas.width, top: topHeight });
+      }
+      pipes.forEach(pipe => {
+        pipe.x -= pipeSpeed;
+        drawPipe(pipe);
+
+        if (
+          80 + birdRadius > pipe.x &&
+          80 - birdRadius < pipe.x + 50 &&
+          (birdY - birdRadius < pipe.top || birdY + birdRadius > pipe.top + gap)
+        ) {
+          endGame();
+        }
+
+        if (pipe.x + 50 === 80) {
+          score++;
+          scoreSound.play();
+        }
+      });
+
+      pipes = pipes.filter(p => p.x > -50);
+
+      ctx.fillStyle = '#000';
+      ctx.font = '24px Fredoka One';
+      ctx.textAlign = 'left';
+      ctx.fillText('Score: ' + score, 20, 40);
+
+      if (birdY + birdRadius > canvas.height || birdY - birdRadius < 0) {
+        endGame();
+      }
+
+      if (!gameOver) {
+        frame++;
+        requestAnimationFrame(update);
+      }
+    }
+
+    function endGame() {
+      gameOver = true;
+      gameOverSound.play();
+      overlay.innerHTML = `
+        <div>Game Over</div>
+        <button id="replayButton" onclick="location.reload()">Replay</button>
+      `;
+      overlay.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
